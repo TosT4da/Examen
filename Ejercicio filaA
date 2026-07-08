@@ -1,0 +1,350 @@
+"""
+GameHub - Sistema de administración de catálogo de videojuegos e inventario
+Evaluación Final Transversal (EFT) - Ejecución práctica
+Asignatura: FPY1101 - Fundamentos de Programación
+
+El programa permite:
+    1. Consultar el stock total de una plataforma.
+    2. Buscar juegos por rango de precio.
+    3. Actualizar el precio de un juego.
+    4. Agregar un nuevo juego.
+    5. Eliminar un juego.
+    6. Salir del programa.
+
+Los diccionarios "juegos" e "inventario" existen desde el inicio del programa
+y se pasan siempre como parámetros a las funciones que los necesitan (nunca
+se accede a ellos como variables globales).
+"""
+
+# ==================================================================
+# FUNCIONES DE VALIDACIÓN (responsabilidad única)
+# ==================================================================
+
+def validar_texto_no_vacio(texto):
+    """Retorna True si el texto no está vacío ni contiene solo espacios en blanco."""
+    return texto.strip() != ""
+
+
+def validar_clasificacion(clasificacion):
+    """Retorna True si la clasificación es exactamente 'E', 'T' o 'M'."""
+    return clasificacion.strip() in ("E", "T", "M")
+
+
+def validar_respuesta_sn(respuesta):
+    """Retorna True si la respuesta ingresada es 's' o 'n' (sin distinguir mayúsculas)."""
+    return respuesta.strip().lower() in ("s", "n")
+
+
+def validar_precio(precio):
+    """Retorna True si el precio es un número entero mayor que cero."""
+    return isinstance(precio, int) and precio > 0
+
+
+def validar_stock(stock):
+    """Retorna True si el stock es un número entero mayor o igual a cero."""
+    return isinstance(stock, int) and stock >= 0
+
+
+def validar_codigo_nuevo(codigo, juegos):
+    """Retorna True si el código no está vacío/en blanco y no existe previamente en juegos."""
+    codigo_normalizado = codigo.strip().upper()
+    return codigo_normalizado != "" and codigo_normalizado not in juegos
+
+
+# ==================================================================
+# FUNCIONES DE LECTURA DE DATOS (con manejo de excepciones)
+# ==================================================================
+
+def leer_opcion_menu(minimo, maximo):
+    """
+    Solicita al usuario una opción del menú. Valida que sea un entero dentro
+    del rango [minimo, maximo], maneja excepciones ante entradas no numéricas
+    y retorna la opción ya validada.
+    """
+    while True:
+        entrada = input("Ingrese opción: ")
+        try:
+            opcion = int(entrada)
+        except ValueError:
+            print("Debe seleccionar una opción válida")
+            continue
+        if minimo <= opcion <= maximo:
+            return opcion
+        print("Debe seleccionar una opción válida")
+
+
+def leer_entero(mensaje):
+    """Solicita un entero al usuario, manejando excepciones ante entradas no numéricas."""
+    while True:
+        entrada = input(mensaje)
+        try:
+            return int(entrada)
+        except ValueError:
+            print("Debe ingresar un valor entero")
+
+
+def leer_rango_precio():
+    """
+    Solicita precio mínimo y máximo. Ambos deben ser enteros (validados con
+    manejo de excepciones), mayores o iguales a cero y con mínimo <= máximo.
+    """
+    while True:
+        try:
+            p_min = int(input("Ingrese precio mínimo: "))
+            p_max = int(input("Ingrese precio máximo: "))
+        except ValueError:
+            print("Debe ingresar valores enteros")
+            continue
+        if p_min >= 0 and p_max >= 0 and p_min <= p_max:
+            return p_min, p_max
+        print("Debe ingresar valores enteros")
+
+
+# ==================================================================
+# FUNCIÓN DE BÚSQUEDA (reutilizada por actualizar y eliminar)
+# ==================================================================
+
+def buscar_codigo(codigo, diccionario):
+    """Retorna True si el código (sin distinguir mayúsculas/minúsculas) existe en el diccionario."""
+    return codigo.strip().upper() in diccionario
+
+
+# ==================================================================
+# FUNCIONES DE LAS OPERACIONES DEL SISTEMA
+# ==================================================================
+
+def stock_plataforma(plataforma, juegos, inventario):
+    """
+    Opción 1: recorre juegos, acumula el stock disponible (desde inventario)
+    de todos los juegos que pertenecen a la plataforma indicada (sin
+    distinguir mayúsculas/minúsculas) y muestra el total por pantalla.
+    No retorna ningún valor.
+    """
+    plataforma_normalizada = plataforma.strip().lower()
+    total_stock = 0
+    for codigo, datos_juego in juegos.items():
+        plataforma_juego = datos_juego[1]
+        if plataforma_juego.lower() == plataforma_normalizada:
+            total_stock += inventario[codigo][1]
+    print(f"El total de stock disponibles es: {total_stock}")
+
+
+def busqueda_precio(p_min, p_max, juegos, inventario):
+    """
+    Opción 2: busca en inventario los juegos con precio dentro de
+    [p_min, p_max] y con stock distinto de cero. Muestra los resultados
+    ordenados alfabéticamente por título, con formato "Titulo--Codigo".
+    No retorna ningún valor.
+    """
+    resultados = []
+    for codigo, datos_inventario in inventario.items():
+        precio = datos_inventario[0]
+        stock = datos_inventario[1]
+        if p_min <= precio <= p_max and stock != 0:
+            titulo = juegos[codigo][0]
+            resultados.append(f"{titulo}--{codigo}")
+
+    resultados.sort()
+
+    if len(resultados) == 0:
+        print("No hay juegos en ese rango de precios.")
+    else:
+        print(f"Los juegos encontrados son: {resultados}")
+
+
+def actualizar_precio(codigo, nuevo_precio, inventario):
+    """
+    Opción 3: si el código existe en inventario, actualiza su precio y
+    retorna True. Si no existe, retorna False. Usa buscar_codigo para
+    decidir.
+    """
+    if buscar_codigo(codigo, inventario):
+        codigo_normalizado = codigo.strip().upper()
+        inventario[codigo_normalizado][0] = nuevo_precio
+        return True
+    return False
+
+
+def agregar_juego(codigo, titulo, plataforma, genero, clasificacion,
+                   multiplayer, editor, precio, stock, juegos, inventario):
+    """
+    Opción 4: agrega el registro en juegos e inventario si el código no
+    existe previamente. Retorna True si fue agregado, o False si el código
+    ya existía.
+    """
+    codigo_normalizado = codigo.strip().upper()
+    if codigo_normalizado in juegos:
+        return False
+    juegos[codigo_normalizado] = [titulo, plataforma, genero, clasificacion, multiplayer, editor]
+    inventario[codigo_normalizado] = [precio, stock]
+    return True
+
+
+def eliminar_juego(codigo, juegos, inventario):
+    """
+    Opción 5: si el código existe, elimina el registro de ambos diccionarios
+    y retorna True. Si no existe, retorna False. Usa buscar_codigo para
+    decidir.
+    """
+    if buscar_codigo(codigo, juegos):
+        codigo_normalizado = codigo.strip().upper()
+        del juegos[codigo_normalizado]
+        del inventario[codigo_normalizado]
+        return True
+    return False
+
+
+# ==================================================================
+# FUNCIONES QUE GESTIONAN LA INTERACCIÓN DE CADA OPCIÓN DEL MENÚ
+# (separan la entrada/salida de datos de la lógica de negocio)
+# ==================================================================
+
+def ejecutar_opcion_stock(juegos, inventario):
+    plataforma = input("Ingrese plataforma a consultar: ")
+    stock_plataforma(plataforma, juegos, inventario)
+
+
+def ejecutar_opcion_busqueda(juegos, inventario):
+    p_min, p_max = leer_rango_precio()
+    busqueda_precio(p_min, p_max, juegos, inventario)
+
+
+def ejecutar_opcion_actualizar(inventario):
+    continuar = "s"
+    while continuar == "s":
+        codigo = input("Ingrese código del juego: ")
+        nuevo_precio = leer_entero("Ingrese nuevo precio: ")
+
+        if actualizar_precio(codigo, nuevo_precio, inventario):
+            print("Precio actualizado")
+        else:
+            print("El código no existe")
+
+        while True:
+            respuesta = input("¿Desea actualizar otro precio (s/n)?: ")
+            if validar_respuesta_sn(respuesta):
+                continuar = respuesta.strip().lower()
+                break
+            print("Debe ingresar 's' o 'n'")
+
+
+def ejecutar_opcion_agregar(juegos, inventario):
+    codigo = input("Ingrese código del juego: ")
+    titulo = input("Ingrese título: ")
+    plataforma = input("Ingrese plataforma: ")
+    genero = input("Ingrese género: ")
+    clasificacion = input("Ingrese clasificación: ")
+    respuesta_multiplayer = input("¿Es multiplayer? (s/n): ")
+    editor = input("Ingrese editor: ")
+
+    try:
+        precio = int(input("Ingrese precio: "))
+    except ValueError:
+        precio = None
+
+    try:
+        stock = int(input("Ingrese stock: "))
+    except ValueError:
+        stock = None
+
+    if not validar_codigo_nuevo(codigo, juegos):
+        print("El código ya existe")
+        return
+    if not validar_texto_no_vacio(titulo):
+        print("El título no es válido")
+        return
+    if not validar_texto_no_vacio(plataforma):
+        print("La plataforma no es válida")
+        return
+    if not validar_texto_no_vacio(genero):
+        print("El género no es válido")
+        return
+    if not validar_clasificacion(clasificacion):
+        print("La clasificación no es válida")
+        return
+    if not validar_respuesta_sn(respuesta_multiplayer):
+        print("La respuesta de multiplayer no es válida")
+        return
+    if not validar_texto_no_vacio(editor):
+        print("El editor no es válido")
+        return
+    if precio is None or not validar_precio(precio):
+        print("El precio no es válido")
+        return
+    if stock is None or not validar_stock(stock):
+        print("El stock no es válido")
+        return
+
+    multiplayer = respuesta_multiplayer.strip().lower() == "s"
+
+    if agregar_juego(codigo, titulo, plataforma, genero, clasificacion,
+                      multiplayer, editor, precio, stock, juegos, inventario):
+        print("Juego agregado")
+    else:
+        print("El código ya existe")
+
+
+def ejecutar_opcion_eliminar(juegos, inventario):
+    codigo = input("Ingrese código del juego: ")
+    if eliminar_juego(codigo, juegos, inventario):
+        print("Juego eliminado")
+    else:
+        print("El código no existe")
+
+
+# ==================================================================
+# PROGRAMA PRINCIPAL
+# ==================================================================
+
+def main():
+    juegos = {
+        "J100": ["The Witcher 3: Wild Hunt", "PC", "rol", "M", False, "CD Projekt Red"],
+        "J101": ["Stardew Valley", "Switch", "simulacion", "E", True, "ConcernedApe"],
+        "J102": ["Mario Kart 8 Deluxe", "Switch", "carreras", "E", True, "Nintendo"],
+        "J103": ["Halo Infinite", "Xbox", "disparos", "M", True, "Xbox Game Studios"],
+        "J104": ["Hades", "PC", "rol", "T", False, "Supergiant Games"],
+        "J105": ["Among Us", "PC", "estrategia", "E", True, "InnerSloth"],
+        "J106": ["Gran Turismo 7", "PS5", "carreras", "E", True, "Polyphony Digital"],
+        "J107": ["It Takes Two", "PS5", "aventura", "T", True, "Hazelight Studios"],
+    }
+
+    inventario = {
+        "J100": [19990, 5],
+        "J101": [9990, 0],
+        "J102": [34990, 8],
+        "J103": [29990, 3],
+        "J104": [14990, 6],
+        "J105": [4990, 0],
+        "J106": [39990, 2],
+        "J107": [27990, 4],
+    }
+
+    opcion = 0
+    while opcion != 6:
+        print("========== MENÚ PRINCIPAL ==========")
+        print("1. Stock por plataforma")
+        print("2. Búsqueda de juegos por rango de precio")
+        print("3. Actualizar precio de juego")
+        print("4. Agregar juego")
+        print("5. Eliminar juego")
+        print("6. Salir")
+        print("=====================================")
+
+        opcion = leer_opcion_menu(1, 6)
+
+        if opcion == 1:
+            ejecutar_opcion_stock(juegos, inventario)
+        elif opcion == 2:
+            ejecutar_opcion_busqueda(juegos, inventario)
+        elif opcion == 3:
+            ejecutar_opcion_actualizar(inventario)
+        elif opcion == 4:
+            ejecutar_opcion_agregar(juegos, inventario)
+        elif opcion == 5:
+            ejecutar_opcion_eliminar(juegos, inventario)
+        elif opcion == 6:
+            print("Programa finalizado.")
+
+
+if __name__ == "__main__":
+    main()
